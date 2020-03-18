@@ -1,0 +1,155 @@
+---
+title: "Customer reviews with Natural Language Processing"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+We have the reviews of a restaurant. We will use machine learning NLP algorithm to predict if the review is positive or negative.
+
+
+
+```{r}
+# Natural Language Processing
+
+# Importing the dataset
+dataset_original = read.delim('Restaurant_Reviews.tsv', quote = '', stringsAsFactors = FALSE)
+```
+Dataset is presented in the tsv file format. It is a tab-separated values format which is very similar to csv (comma-separated values) format. This format is considered to be better then csv for NLP because commas are very likely to be a part of a sentence and csv file will recognize them as separators. And tabs are not likely to be the part of the sentence. So mind this and always use tsv format.
+
+Here we have only two columns: Review and Liked. Liked is 1 for positive comments and 0 for negative
+
+```{r}
+# Cleaning the texts
+#install.packages('tm')
+#install.packages('SnowballC')
+library(tm)
+library(SnowballC)
+corpus = VCorpus(VectorSource(dataset_original$Review)) # first step of cleaning the dataset for getting it ready for NLP
+as.character(corpus[[1]])
+```
+
+
+```{r}
+corpus = tm_map(corpus, content_transformer(tolower))  # write all the reviews with lower case. by doing that the same word written with both upper case and lower case will be understood as one word.
+as.character(corpus[[1]]) #check if it lowercase
+```
+
+
+
+```{r}
+corpus = tm_map(corpus, removeNumbers) 
+as.character(corpus[[1]]) #check if the numbers removed
+```
+
+
+
+```{r}
+corpus = tm_map(corpus, removePunctuation) # removes punctuation
+as.character(corpus[[1]]) #check if the punctuations removed
+```
+
+
+
+```{r}
+library(SnowballC) #this library is necessary for removing unrelevant words
+corpus = tm_map(corpus, removeWords, stopwords()) # removes the unrelevant words for NLP
+as.character(corpus[[1]]) # see unrelevant words are removed
+```
+
+```{r}
+corpus = tm_map(corpus, stemDocument) # getting the root of each word
+as.character(corpus[[1]])
+```
+
+
+
+```{r}
+corpus = tm_map(corpus, stripWhitespace) # removing extra spaces caused by previous steps
+as.character(corpus[[841]])
+```
+
+The data is clean now. This dataset has 1000 rows. And assume that this dataset has 1500 different words.That mean is is going to be 1500 columns and 1000 rows.
+The dataset become huge now.
+
+
+```{r}
+# Creating the Bag of Words model
+dtm = DocumentTermMatrix(corpus) # this function creates the huge function I talk about above.
+dtm # as you see here the sparsity is %100. THe reason is the dataset has too many 0.
+```
+It has 1577 terms.
+
+```{r}
+dtm = removeSparseTerms(dtm, 0.999) # filter nonfrequent words of the matrix. We want to keep the %99 of the most frequent words.
+dtm
+```
+After filtering non ferequent words number of terms reduced to 691.
+Now the column number is 691. This function removed nonfrequent words. And made dataset more predictible and significant.
+We choose 0.999 because we have 1000 observations which is not so big. So we choose big number like 0.999.
+
+
+```{r}
+# Since our dataset is matrix, we need to convert it to dataframe for classification models
+dataset = as.data.frame(as.matrix(dtm))
+head(dataset)
+```
+As you see the table above there are many words are at the columns.
+
+```{r}
+dataset$Liked = dataset_original$Liked # we created a new column which has the same name with original one. (liked column)
+```
+
+
+
+Now, it is time to build classification model. The most successful classification models for NLP are Decision Tree,Random Forest and Naive Bayes.
+
+I will continuewith Random Forest
+
+----------------Random Forest Classification----------------------
+
+```{r}
+# Encoding the target feature as factor
+dataset$Liked = factor(dataset$Liked, levels = c(0, 1))
+```
+We also do not need feature scaling. We have already zeros and ones.
+
+Splitting the dataset into the Training set and Test set
+```{r}
+# install.packages('caTools')
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$Liked, SplitRatio = 0.8)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+```
+
+
+
+
+```{r}
+# Fitting Random Forest Classification to the Training set
+# install.packages('randomForest')
+library(randomForest)
+classifier = randomForest(x = training_set[-692], # training set shouldn't include  dependent variable
+                          y = training_set$Liked,
+                          ntree = 10) 
+# I'll try with 10 trees. But you can try with more trees and compare the accuracy of them to figure out most accurate result.
+```
+
+
+```{r}
+# Predicting the Test set results
+y_pred = predict(classifier, newdata = test_set[-692])
+y_pred
+```
+
+
+```{r}
+# Making the Confusion Matrix
+cm = table(test_set[, 692], y_pred)
+accuracy = (82+77) / (82+77+23+18)
+accuracy 
+```
+The accuracy of the model is 0.795
